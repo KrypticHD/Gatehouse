@@ -2,6 +2,7 @@ import { prisma } from "@/server/db/client";
 import { getSessionCookie } from "@/server/auth/session";
 
 export interface CurrentSession {
+  userId: string;
   address: string;
   chainId: number;
 }
@@ -25,7 +26,7 @@ export async function getCurrentSession(): Promise<CurrentSession | null> {
     return null;
   }
 
-  return { address: session.wallet.address, chainId: session.chainId };
+  return { userId: session.userId, address: session.wallet.address, chainId: session.chainId };
 }
 
 export async function destroySession(): Promise<void> {

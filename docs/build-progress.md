@@ -1,5 +1,92 @@
 # Gatehouse — Build progress
 
+## Phase 4: project-owner community creation
+
+### What changed
+
+Project owners can now actually create a community — the first real (non-fixture,
+database-backed) community-facing feature. Every community is mandatorily linked to its own
+token; there is no way to create one without a chain + contract address + minimum balance.
+
+- **`POST /api/communities`** (`src/app/api/communities/route.ts`) — requires an
+  authenticated session (401 otherwise), validates the full draft with the existing
+  `communityDraftSchema` (already covered the token-gate fields as required, not optional),
+  and calls `src/server/communities/create-community.ts`, which in one transaction creates:
+  the `Community` row (`DRAFT`/`UNVERIFIED`/`UNPUBLISHED`), its `CommunityAccessRule` (token
+  amount converted with the existing exact-integer `toRawTokenAmount`, never a float), a
+  `CommunityVerification` row, and a `CommunityAdministrator` row making the caller `OWNER`.
+  A taken slug returns `409 slug_taken` instead of a generic 500.
+- **`POST /api/communities/:id/submit`** (`src/server/communities/submit-for-verification.ts`)
+  — moves a draft `DRAFT -> IN_REVIEW` / verification `UNVERIFIED -> PENDING`. Checks the
+  caller is an administrator of *that specific* community (403 otherwise — an admin of one
+  community is never treated as authorized for another) and that it's still a `DRAFT` (409
+  `invalid_state` on a second submit). Does not touch `publicationStatus` — verification and
+  publication remain independent axes; there is no reviewer/approval UI yet, so nothing can
+  reach `VERIFIED`/`ACTIVE`/`PUBLISHED` in this phase.
+- **`/app/create`** — the creation form (client component, gated on an authenticated session
+  — shows a connect/sign-in prompt otherwise). Project details (name, slug with
+  auto-suggestion from name, ticker, description, optional artwork URL — no upload storage
+  yet, URL only) plus a clearly-separated, explicitly-required "Token gate" section (network,
+  contract address, decimals, minimum balance).
+- **`/app/communities/[slug]`** — the draft's detail/preview page (server component). A
+  private draft is invisible to everyone except its administrators (`notFound()` for anyone
+  else — see docs/security.md), shows lifecycle/verification/publication status and the
+  linked token gate, and — for an admin viewing their own `DRAFT` — a "Submit for
+  verification" button (`SubmitForVerificationButton.tsx`, a small client island).
+- **`/app/my-communities`** — lists communities where the signed-in wallet is an
+  administrator, with a "Create community" call to action.
+- The Explore page's "Create community" button now actually links to `/app/create` (it was a
+  dead `<button>` before).
+- `getCurrentSession()` now also returns `userId` (previously only `address`/`chainId`) —
+  needed to check `CommunityAdministrator` membership. `GET /api/auth/session` deliberately
+  still only serializes `address`/`chainId` to the client; `userId` never leaves the server.
+
+### Verified end-to-end against the live database
+
+Simulated two separate wallets end-to-end (nonce → sign → verify → session, exactly as in
+Phase 2) and drove the real HTTP API:
+
+- Create without a session → `401`.
+- Create → `201`, with the community, access rule, verification row and admin membership all
+  actually persisted.
+- Create with the reserved slug `gatehouse` → `400` (existing Zod rule, confirmed still
+  enforced through this new path).
+- Create with an already-used slug → `409 slug_taken`.
+- Detail page as the owner (also requires the `/app` preview-gate cookie, since that's a
+  separate layer) → `200`, correctly shows name, ticker, the token contract address, and the
+  submit button.
+- Detail page for the same community with *no* session → `404` (the private-draft check
+  works, not just "isn't linked to").
+- Submit without a session → `401`; submit as the real owner → `200` and lifecycle flips to
+  `IN_REVIEW`; submitting the same community again → `409 invalid_state`; submitting a
+  *different* community as a *different, non-admin* wallet → `403 forbidden`.
+- `/app/my-communities` lists the created communities for the owner's session.
+
+All test communities and their test waitlist rows were deleted after verification — this
+project's `DATABASE_URL` is the same database across Development/Preview/Production, so
+anything created while testing locally is real production data until cleaned up.
+
+### Still not implemented
+
+- **No reviewer/admin UI.** A community can reach `IN_REVIEW` but nothing in this app can
+  move it to `VERIFIED`/`ACTIVE`/`PUBLISHED` yet — that's the next real gap once a first
+  community actually needs to go live.
+- **No image upload.** `artworkUrl` only accepts a URL someone already hosts elsewhere.
+- **No edit flow.** A draft can be created and submitted, but not edited afterward.
+- **No announcements/discussions authoring** — still schema-only, unchanged from Phase 1.
+
+### Checks run (Phase 4)
+
+| Check | Result |
+| --- | --- |
+| `npm run typecheck` | Pass |
+| `npm run lint` | Pass (same pre-existing `<img>` warning as Phase 3) |
+| `npm test` | Pass, 41/41 (4 new: `slugifyName`) |
+| `npm run build` | Succeeds; `/api/communities`, `/api/communities/[id]/submit`,
+  `/app/communities/[slug]`, `/app/my-communities` all present and correctly dynamic |
+| End-to-end (see above) | All paths verified against the live database via direct HTTP requests with real signed wallet sessions |
+| Visual | Unauthenticated states of `/app/create` and `/app/my-communities` verified in-browser (correct prompt + Connect wallet button, no console errors). The authenticated form itself was not visually exercised — this session's browser has no injectable wallet extension to complete the connect+sign flow — but is a straightforward, previously-established styling pattern and is fully covered by the API-level end-to-end tests above |
+
 ## Phase 3: public "coming soon" landing page
 
 ### What changed

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { CommunityCard } from "@/components/explore/CommunityCard";
@@ -47,12 +48,12 @@ export default function ExplorePage() {
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <h1 className="text-xl font-semibold text-cream">Explore communities</h1>
 
-          <button
-            type="button"
+          <Link
+            href="/app/create"
             className="inline-flex min-h-11 items-center justify-center rounded-full bg-warm-coral px-4 text-sm font-semibold text-midnight transition hover:brightness-105"
           >
             Create community
-          </button>
+          </Link>
         </div>
 
         <ConnectionStatusLine />

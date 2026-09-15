@@ -17,8 +17,9 @@ planned in the current phase.
 
 - **`/`** — the public "coming soon" landing page (email waitlist). This is what any
   ordinary visitor sees.
-- **`/app`** — the pre-launch Explore app (wallet auth, community discovery). Blocked for
-  everyone by default — see "The pre-launch app is gated" below.
+- **`/app`** — the pre-launch Explore app (wallet auth, community discovery,
+  project-owner community creation at `/app/create`). Blocked for everyone by default — see
+  "The pre-launch app is gated" below.
 
 See [`docs/build-progress.md`](docs/build-progress.md) for the full checklist of what's real
 vs. planned, and the recommended next phase.
