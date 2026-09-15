@@ -1,0 +1,428 @@
+// Gatehouse data model.
+//
+// Design notes (see docs/architecture.md for the full rationale):
+// - Every entity that is referenced across requests uses an immutable cuid `id`.
+//   `Community.slug` is the only externally-changeable identifier.
+// - On-chain amounts (token balances, wei amounts) are stored as `Decimal @db.Decimal(78, 0)`
+//   (scale 0 forces integer-only storage, precision 78 comfortably covers a uint256), never
+//   as Float/Int, to avoid floating-point rounding of on-chain values.
+// - Tokens are identified by (chainId, tokenContractAddress) pairs, never by ticker alone.
+// - Community lifecycle, verification, publication and subscription state are four
+//   independent axes, matching the product requirement that verification/publication/payment
+//   never imply one another.
+// - Billing (CommunitySubscription/SubscriptionDeposit/SubscriptionCharge) models the
+//   prepaid-ETH ledger shape so the schema supports it, but no billing contract or job
+//   that writes to these tables is implemented in this phase.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7 no longer reads a connection URL from the schema. Migrate reads it from
+// prisma.config.ts (via DATABASE_URL), and the app passes a driver adapter explicitly
+// when constructing PrismaClient — see src/server/db/client.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Identity & authentication
+// ---------------------------------------------------------------------------
+
+/// A person, identified by the collection of wallets they have proven control of.
+/// Never stores an email, password or private key.
+model User {
+  id          String   @id @default(cuid())
+  displayName String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  wallets                Wallet[]
+  sessions               Session[]
+  administratorOf        CommunityAdministrator[]
+  announcementsAuthored  Announcement[]
+  discussionThreads      DiscussionThread[]
+  discussionReplies      DiscussionReply[]
+  moderationReportsFiled ModerationReport[]       @relation("ModerationReportReporter")
+  moderationReportsRuled ModerationReport[]       @relation("ModerationReportResolver")
+  auditEvents            AuditEvent[]
+
+  @@map("users")
+}
+
+/// A single EVM address that has completed Sign-In with Ethereum at least once.
+/// The address is the durable, chain-verifiable anchor of identity; `User` wraps it so a
+/// person can eventually link more than one wallet without changing their history.
+model Wallet {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Lowercased hex address (0x…), unique across all users.
+  address    String    @unique
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime?
+
+  sessions Session[]
+
+  @@index([userId])
+  @@map("wallets")
+}
+
+/// A one-use, short-lived nonce that must appear in the SIWE message a wallet signs.
+/// `consumedAt` is set the instant a signature is verified so the same signed message
+/// can never be replayed.
+model AuthenticationNonce {
+  id            String    @id @default(cuid())
+  nonce         String    @unique
+  /// Lowercased address the nonce was issued for. The signature must recover to this address.
+  walletAddress String
+  domain        String
+  chainId       Int
+  issuedAt      DateTime  @default(now())
+  expiresAt     DateTime
+  consumedAt    DateTime?
+  requestIp     String?
+
+  @@index([walletAddress])
+  @@index([expiresAt])
+  @@map("authentication_nonces")
+}
+
+/// Server-side session record. The HttpOnly cookie only ever holds an encrypted pointer
+/// to `id` (via iron-session) — every protected request re-checks this row so a session
+/// can be revoked immediately instead of waiting for a stateless token to expire.
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletId  String
+  wallet    Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  /// Chain ID the SIWE message was signed for.
+  chainId   Int
+  issuedAt  DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  ipAddress String?
+
+  @@index([userId])
+  @@index([walletId])
+  @@map("sessions")
+}
+
+// ---------------------------------------------------------------------------
+// Communities
+// ---------------------------------------------------------------------------
+
+enum CommunityLifecycleStatus {
+  DRAFT
+  IN_REVIEW
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum CommunityVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum CommunityPublicationStatus {
+  UNPUBLISHED
+  PUBLISHED
+}
+
+enum CommunitySubscriptionStatus {
+  NONE
+  ACTIVE
+  GRACE_PERIOD
+  PAST_DUE
+  CANCELED
+  SUSPENDED
+}
+
+enum CommunityAdminRole {
+  OWNER
+  MANAGER
+}
+
+/// A project's community. Deliberately holds no token/contract fields itself — those live
+/// on `CommunityAccessRule` so a community can later be gated by more than one rule.
+model Community {
+  /// Immutable internal identifier. Never reused, never exposed for editing.
+  id          String  @id @default(cuid())
+  /// Public, changeable handle used in URLs.
+  slug        String  @unique
+  name        String
+  ticker      String
+  description String  @db.Text
+  artworkUrl  String?
+
+  /// True only for the single reserved Gatehouse platform community. The community-creation
+  /// endpoint refuses this flag and the "gatehouse" slug for ordinary project owners; see
+  /// docs/security.md for the enforcement point.
+  isPlatformCommunity Boolean @default(false)
+
+  lifecycleStatus    CommunityLifecycleStatus    @default(DRAFT)
+  /// Denormalized copy of CommunityVerification.status, kept in sync in the same
+  /// transaction, so Explore-page filtering never needs a join.
+  verificationStatus CommunityVerificationStatus @default(UNVERIFIED)
+  publicationStatus  CommunityPublicationStatus  @default(UNPUBLISHED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  administrators    CommunityAdministrator[]
+  accessRules       CommunityAccessRule[]
+  verification      CommunityVerification?
+  subscription      CommunitySubscription?
+  announcements     Announcement[]
+  discussionThreads DiscussionThread[]
+  moderationReports ModerationReport[]
+  auditEvents       AuditEvent[]
+
+  @@map("communities")
+}
+
+/// Direct owner/manager relationship. Every admin-only request must check for a row here
+/// scoped to the specific communityId in the URL — an admin of one community must never
+/// be treated as authorized for another.
+model CommunityAdministrator {
+  id          String             @id @default(cuid())
+  communityId String
+  community   Community          @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        CommunityAdminRole @default(OWNER)
+  createdAt   DateTime           @default(now())
+
+  @@unique([communityId, userId])
+  @@index([userId])
+  @@map("community_administrators")
+}
+
+/// One token-holding requirement that unlocks a community. Phase 1 creates exactly one of
+/// these per community; the model is a list so future participation tiers or multi-token
+/// gates don't require a schema change.
+model CommunityAccessRule {
+  id                   String    @id @default(cuid())
+  communityId          String
+  community            Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  chainId              Int
+  /// Lowercased ERC-20 contract address. Combined with chainId this — never the ticker —
+  /// is the token's identity.
+  tokenContractAddress String
+  tokenDecimals        Int
+  /// Exact integer minimum balance, in the token's smallest unit (matches tokenDecimals).
+  minimumTokenBalance  Decimal   @db.Decimal(78, 0)
+  isActive             Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([communityId])
+  @@index([chainId, tokenContractAddress])
+  @@map("community_access_rules")
+}
+
+/// Verification is a review workflow, kept entirely separate from payment/subscription
+/// state and from publication state. Holding tokens or knowing a contract address never
+/// grants verification by itself.
+model CommunityVerification {
+  id             String                      @id @default(cuid())
+  communityId    String                      @unique
+  community      Community                   @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  status         CommunityVerificationStatus @default(UNVERIFIED)
+  submittedAt    DateTime?
+  reviewedAt     DateTime?
+  reviewerUserId String?
+  reviewerNotes  String?                     @db.Text
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+
+  @@map("community_verifications")
+}
+
+// ---------------------------------------------------------------------------
+// Billing (schema only — no billing contract or charge job in this phase)
+// ---------------------------------------------------------------------------
+
+/// One row per community, tracking the recurring-subscription relationship. The balance
+/// available to spend is always *computed* as
+///   sum(SubscriptionDeposit.amountWei where confirmed) - sum(SubscriptionCharge.amountWei where succeeded)
+/// rather than stored as a single mutable counter, so prepaid credit and earned Gatehouse
+/// revenue can never be conflated by a missed update.
+model CommunitySubscription {
+  id                     String                      @id @default(cuid())
+  communityId            String                      @unique
+  community              Community                   @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  status                 CommunitySubscriptionStatus @default(NONE)
+  /// Chain the (future) prepaid billing contract will live on. Unset until that contract exists.
+  billingChainId         Int?
+  billingContractAddress String?
+  planCode               String?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean                     @default(false)
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+
+  deposits SubscriptionDeposit[]
+  charges  SubscriptionCharge[]
+
+  @@map("community_subscriptions")
+}
+
+/// A prepaid ETH credit added by a project owner. Unused credit — the sum of confirmed
+/// deposits minus succeeded charges — is never itself Gatehouse revenue.
+model SubscriptionDeposit {
+  id             String                @id @default(cuid())
+  subscriptionId String
+  subscription   CommunitySubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  chainId        Int
+  amountWei      Decimal               @db.Decimal(78, 0)
+  txHash         String?               @unique
+  confirmedAt    DateTime?
+  createdAt      DateTime              @default(now())
+
+  @@index([subscriptionId])
+  @@map("subscription_deposits")
+}
+
+enum SubscriptionChargeStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+/// A single recurring-service charge drawn from prepaid credit. Only a SUCCEEDED charge
+/// counts as recognised Gatehouse revenue.
+model SubscriptionCharge {
+  id             String                   @id @default(cuid())
+  subscriptionId String
+  subscription   CommunitySubscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  amountWei      Decimal                  @db.Decimal(78, 0)
+  periodStart    DateTime
+  periodEnd      DateTime
+  status         SubscriptionChargeStatus @default(PENDING)
+  chargedAt      DateTime?
+  createdAt      DateTime                 @default(now())
+
+  @@index([subscriptionId])
+  @@map("subscription_charges")
+}
+
+// ---------------------------------------------------------------------------
+// Community content
+// ---------------------------------------------------------------------------
+
+enum ContentVisibility {
+  PUBLIC
+  HOLDERS_ONLY
+}
+
+model Announcement {
+  id           String            @id @default(cuid())
+  communityId  String
+  community    Community         @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  authorUserId String
+  author       User              @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  title        String
+  body         String            @db.Text
+  visibility   ContentVisibility @default(HOLDERS_ONLY)
+  publishedAt  DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([communityId, publishedAt])
+  @@map("announcements")
+}
+
+model DiscussionThread {
+  id           String            @id @default(cuid())
+  communityId  String
+  community    Community         @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  authorUserId String
+  author       User              @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  title        String
+  visibility   ContentVisibility @default(HOLDERS_ONLY)
+  isPinned     Boolean           @default(false)
+  isLocked     Boolean           @default(false)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  replies DiscussionReply[]
+
+  @@index([communityId, createdAt])
+  @@map("discussion_threads")
+}
+
+model DiscussionReply {
+  id           String           @id @default(cuid())
+  threadId     String
+  thread       DiscussionThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  authorUserId String
+  author       User             @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+  body         String           @db.Text
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([threadId, createdAt])
+  @@map("discussion_replies")
+}
+
+// ---------------------------------------------------------------------------
+// Moderation & audit
+// ---------------------------------------------------------------------------
+
+enum ModerationTargetType {
+  ANNOUNCEMENT
+  DISCUSSION_THREAD
+  DISCUSSION_REPLY
+}
+
+enum ModerationReportStatus {
+  OPEN
+  REVIEWED
+  DISMISSED
+  ACTIONED
+}
+
+model ModerationReport {
+  id               String                 @id @default(cuid())
+  communityId      String
+  community        Community              @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  reporterUserId   String
+  reporter         User                   @relation("ModerationReportReporter", fields: [reporterUserId], references: [id], onDelete: Cascade)
+  targetType       ModerationTargetType
+  targetId         String
+  reason           String                 @db.Text
+  status           ModerationReportStatus @default(OPEN)
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+  resolvedBy       User?                  @relation("ModerationReportResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  createdAt        DateTime               @default(now())
+
+  @@index([communityId, status])
+  @@map("moderation_reports")
+}
+
+/// Append-only log of security- and admin-relevant events (session created, community
+/// created, verification decision, etc.). `communityId` is nullable so platform-level
+/// events (e.g. a platform admin action) can be recorded too.
+model AuditEvent {
+  id          String     @id @default(cuid())
+  actorUserId String?
+  actor       User?      @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  communityId String?
+  community   Community? @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  action      String
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime   @default(now())
+
+  @@index([communityId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("audit_events")
+}

@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+/*
+ * Gatehouse design tokens.
+ * Source: approved visual identity board (2026-09-15) — see docs/brand-source.
+ *   Midnight Navy #141A35, Electric Blue #476CFF, Soft Lilac #B5A1ED,
+ *   Warm Coral #FF8A78, Cream #F7F2E9.
+ * Gatehouse is dark-foundation by design (not a light/dark toggle app), so these tokens
+ * are declared once on :root rather than branched on prefers-color-scheme.
+ */
+:root {
+  --color-midnight: #141a35;
+  --color-midnight-raised: #1b2242;
+  --color-midnight-border: #2a3260;
+  --color-electric-blue: #476cff;
+  --color-soft-lilac: #b5a1ed;
+  --color-warm-coral: #ff8a78;
+  --color-cream: #f7f2e9;
+  --color-cream-muted: #cfd0e0;
+
+  --background: var(--color-midnight);
+  --foreground: var(--color-cream);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-midnight: var(--color-midnight);
+  --color-midnight-raised: var(--color-midnight-raised);
+  --color-midnight-border: var(--color-midnight-border);
+  --color-electric-blue: var(--color-electric-blue);
+  --color-soft-lilac: var(--color-soft-lilac);
+  --color-warm-coral: var(--color-warm-coral);
+  --color-cream: var(--color-cream);
+  --color-cream-muted: var(--color-cream-muted);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
