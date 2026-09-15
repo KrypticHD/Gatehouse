@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { GatehouseMark } from "@/components/brand/GatehouseMark";
+import { GatehouseLogoMark } from "@/components/brand/GatehouseLogoMark";
 import { WalletButtonPlaceholder } from "@/components/wallet/WalletButtonPlaceholder";
 
 const NAV_LINKS = [
@@ -23,7 +23,7 @@ export function Header() {
     <header className="sticky top-0 z-20 border-b border-midnight-border bg-midnight/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-electric-blue">
-          <GatehouseMark size={28} />
+          <GatehouseLogoMark size={36} priority />
           <span className="text-lg font-semibold tracking-tight text-cream">Gatehouse</span>
         </Link>
 

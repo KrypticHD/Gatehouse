@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 
 import { CommunityCard } from "@/components/explore/CommunityCard";
+import { ExploreHero } from "@/components/explore/ExploreHero";
 import { EXPLORE_FILTERS, FilterTabs, type ExploreFilter } from "@/components/explore/FilterTabs";
+import { PlugIcon } from "@/components/explore/icons";
 import { SearchBar } from "@/components/explore/SearchBar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ILLUSTRATIVE_COMMUNITIES } from "@/lib/fixtures/communities";
@@ -38,35 +40,35 @@ export default function ExplorePage() {
   const plannedNotice = PLANNED_FILTER_COPY[filter];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
+      <ExploreHero />
+
       <section className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold text-cream sm:text-3xl">Explore communities</h1>
-          <p className="text-sm text-cream-muted">
-            Your token. Your people. Connect a wallet to automatically find every community
-            your holdings unlock — or browse without connecting.
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <h1 className="text-xl font-semibold text-cream">Explore communities</h1>
+
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-warm-coral px-4 text-sm font-semibold text-midnight transition hover:brightness-105"
+          >
+            Create community
+          </button>
         </div>
 
-        <div
-          role="status"
-          className="flex items-center gap-2 rounded-xl border border-midnight-border bg-midnight-raised px-4 py-3 text-sm text-cream-muted"
-        >
-          <span aria-hidden>🔌</span>
-          <span>You&apos;re browsing as a guest — not connected to a wallet.</span>
-        </div>
+        <p className="flex items-center gap-1.5 text-sm text-cream-muted">
+          <PlugIcon className="shrink-0" />
+          Not connected — browsing public communities.
+        </p>
 
         <SearchBar value={query} onChange={setQuery} />
         <FilterTabs value={filter} onChange={setFilter} />
       </section>
 
-      <section aria-label="Illustrative development data notice">
-        <p className="text-xs text-cream-muted/80">
-          The communities below are illustrative development data, not real projects.
-        </p>
-      </section>
-
       <section className="flex flex-col gap-3">
+        <span className="inline-flex w-fit items-center rounded-full border border-midnight-border bg-midnight-raised px-2.5 py-1 text-[11px] font-medium tracking-wide text-cream-muted uppercase">
+          Demo communities
+        </span>
+
         {plannedNotice ? (
           <EmptyState icon="🗺️" title={`${filter} is coming soon`} description={plannedNotice} />
         ) : results.length === 0 ? (
@@ -76,26 +78,12 @@ export default function ExplorePage() {
             description="Try a different name, ticker or token address."
           />
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {results.map((community) => (
               <CommunityCard key={community.id} community={community} />
             ))}
           </div>
         )}
-      </section>
-
-      <section className="flex flex-col items-center gap-3 rounded-2xl border border-midnight-border bg-midnight-raised px-6 py-8 text-center">
-        <p className="text-base font-semibold text-cream">Bring your holders together.</p>
-        <p className="max-w-sm text-sm text-cream-muted">
-          Create a draft community, set your token gate and preview it before submitting for
-          verification.
-        </p>
-        <button
-          type="button"
-          className="inline-flex min-h-11 items-center justify-center rounded-full bg-warm-coral px-5 text-sm font-semibold text-midnight transition hover:brightness-105"
-        >
-          Create community
-        </button>
       </section>
     </div>
   );
