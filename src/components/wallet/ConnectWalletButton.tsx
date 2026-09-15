@@ -45,8 +45,8 @@ export function ConnectWalletButton({ className = "" }: { className?: string }) 
         throw new Error("No browser wallet found. Install MetaMask or another injected wallet.");
       }
       await connectAsync({ connector: injectedConnector });
-    } catch {
-      setError("Couldn't connect. Please try again.");
+    } catch (caughtError) {
+      setError(describeConnectError(caughtError));
     } finally {
       setStatus("idle");
     }
@@ -62,8 +62,8 @@ export function ConnectWalletButton({ className = "" }: { className?: string }) 
       setStatus("verifying");
       await verifySignature(nonce, signature);
       await queryClient.invalidateQueries({ queryKey: ["auth-session"] });
-    } catch {
-      setError("Sign-in failed or was rejected. Please try again.");
+    } catch (caughtError) {
+      setError(describeSignInError(caughtError));
     } finally {
       setStatus("idle");
     }
@@ -143,4 +143,45 @@ export function ConnectWalletButton({ className = "" }: { className?: string }) 
       ) : null}
     </div>
   );
+}
+
+function extractMessage(error: unknown): string {
+  if (error && typeof error === "object" && "shortMessage" in error) {
+    const shortMessage = (error as { shortMessage?: unknown }).shortMessage;
+    if (typeof shortMessage === "string" && shortMessage.length > 0) {
+      return shortMessage;
+    }
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "";
+}
+
+function describeConnectError(error: unknown): string {
+  const raw = extractMessage(error);
+  if (/no injected|provider not found|no ethereum|not detected/i.test(raw)) {
+    return "No browser wallet found. Install a wallet extension (e.g. MetaMask) and reload the page.";
+  }
+  if (/reject|denied|cancel/i.test(raw)) {
+    return "Connection request was rejected.";
+  }
+  return raw || "Couldn't connect. Please try again.";
+}
+
+function describeSignInError(error: unknown): string {
+  const raw = extractMessage(error);
+  if (/reject|denied|cancel/i.test(raw)) {
+    return "Signature request was rejected.";
+  }
+  if (raw === "nonce_expired") {
+    return "That sign-in request expired. Please try again.";
+  }
+  if (raw === "nonce_already_used") {
+    return "That sign-in request was already used. Please try again.";
+  }
+  if (raw === "signature_mismatch") {
+    return "Signature didn't match. Please try again.";
+  }
+  return raw || "Sign-in failed. Please try again.";
 }
