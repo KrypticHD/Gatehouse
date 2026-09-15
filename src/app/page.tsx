@@ -3,9 +3,9 @@
 import { useMemo, useState } from "react";
 
 import { CommunityCard } from "@/components/explore/CommunityCard";
+import { ConnectionStatusLine } from "@/components/explore/ConnectionStatusLine";
 import { ExploreHero } from "@/components/explore/ExploreHero";
 import { EXPLORE_FILTERS, FilterTabs, type ExploreFilter } from "@/components/explore/FilterTabs";
-import { PlugIcon } from "@/components/explore/icons";
 import { SearchBar } from "@/components/explore/SearchBar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ILLUSTRATIVE_COMMUNITIES } from "@/lib/fixtures/communities";
@@ -55,10 +55,7 @@ export default function ExplorePage() {
           </button>
         </div>
 
-        <p className="flex items-center gap-1.5 text-sm text-cream-muted">
-          <PlugIcon className="shrink-0" />
-          Not connected — browsing public communities.
-        </p>
+        <ConnectionStatusLine />
 
         <SearchBar value={query} onChange={setQuery} />
         <FilterTabs value={filter} onChange={setFilter} />

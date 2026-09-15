@@ -78,6 +78,10 @@ model AuthenticationNonce {
   /// Lowercased address the nonce was issued for. The signature must recover to this address.
   walletAddress String
   domain        String
+  /// Full origin (scheme + host) used as the SIWE message's URI field. Stored verbatim
+  /// (rather than re-derived from config at verify time) so the message can be rebuilt
+  /// byte-for-byte even if the app's configured origin changes between issuance and verify.
+  uri           String
   chainId       Int
   issuedAt      DateTime  @default(now())
   expiresAt     DateTime

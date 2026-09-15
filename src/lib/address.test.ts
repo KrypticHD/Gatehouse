@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isValidAddress, normalizeAddress } from "@/lib/address";
+import { isValidAddress, normalizeAddress, truncateAddress } from "@/lib/address";
 
 describe("isValidAddress", () => {
   it("accepts a well-formed address", () => {
@@ -29,5 +29,15 @@ describe("normalizeAddress", () => {
 
   it("throws on an invalid address", () => {
     expect(() => normalizeAddress("not-an-address")).toThrow();
+  });
+});
+
+describe("truncateAddress", () => {
+  it("shortens a valid address", () => {
+    expect(truncateAddress("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed")).toBe("0x5aAe…eAed");
+  });
+
+  it("throws on an invalid address", () => {
+    expect(() => truncateAddress("not-an-address")).toThrow();
   });
 });

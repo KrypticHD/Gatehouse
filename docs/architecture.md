@@ -9,8 +9,8 @@
 | Styling | Tailwind CSS v4 | Design tokens as CSS variables in `src/app/globals.css`, exposed via `@theme inline` |
 | Database | PostgreSQL | No local disk state; managed Postgres in every environment |
 | ORM | Prisma 7 | Uses the new `prisma-client` generator + explicit driver adapter (see below) |
-| Wallet connection | wagmi 2.x + viem + RainbowKit | **Pinned to wagmi v2**, not v3 — see "Resolved technical choices" |
-| Auth | Sign-In with Ethereum (EIP-4361) | Not implemented yet; see docs/build-progress.md |
+| Wallet connection | wagmi 2.x + viem, browser-injected connector | RainbowKit is installed (pinned to wagmi v2, see below) but not yet mounted — the current UI uses wagmi's `injected()` connector directly so no WalletConnect project ID is required; see docs/build-progress.md |
+| Auth | Sign-In with Ethereum (EIP-4361) | Implemented — `src/lib/siwe.ts` + `src/server/auth/*`, verified end-to-end; see docs/build-progress.md |
 | Sessions | iron-session (encrypted HttpOnly cookie) + a `Session` DB row | Cookie holds a pointer, not the source of truth — see docs/security.md |
 | Validation | Zod | `src/lib/validation/*`, `src/server/env.ts` |
 | Tests | Vitest | Pure-function unit tests only in this phase (`src/**/*.test.ts`) |
@@ -79,7 +79,7 @@ Full schema: [`prisma/schema.prisma`](../prisma/schema.prisma). Key decisions:
 
 | Module | This phase | Integration point when it lands |
 | --- | --- | --- |
-| Wallet auth (SIWE) | Not implemented; `WalletButtonPlaceholder` component only | `src/server/env.ts` already reserves `SESSION_SECRET`; nonce issuance will use `AuthenticationNonce`, verification will use viem (`verifyMessage`/`recoverMessageAddress`) rather than the `ethers`-dependent `siwe` npm package, avoiding an unused second web3 library alongside wagmi/viem |
+| Wallet auth (SIWE) | **Implemented.** `ConnectWalletButton` + `/api/auth/{nonce,verify,session,logout}`, verified end-to-end against a real database | Next: RainbowKit UI (multi-wallet modal) and WalletConnect once a project ID exists; chain-switch prompting for wallets on an unsupported network |
 | Eligibility checking | Pure decision logic only (`src/lib/eligibility.ts`), unit-tested; no live RPC call | A future `checkAccessRule(rule, walletAddress)` will call `viem`'s `readContract` for `balanceOf`, wrap failures as `{ ok: false, reason }`, and feed the result into `evaluateAccessRule` unchanged |
 | Announcements / discussions | UI components only, reading fixture data | CRUD routes will authorize via `CommunityAdministrator` (write) and `evaluateCommunityEligibility` (holder read) |
 | Billing | Schema only (`CommunitySubscription`, `SubscriptionDeposit`, `SubscriptionCharge`) | A future billing contract emits deposit events; a scheduled job (Vercel Cron or a queue) writes `SubscriptionCharge` rows — no such job exists yet |
@@ -103,7 +103,8 @@ Full schema: [`prisma/schema.prisma`](../prisma/schema.prisma). Key decisions:
 
 - Production blockchain network(s) — development defaults to Sepolia
   (`NEXT_PUBLIC_DEFAULT_CHAIN_ID=11155111`); production network selection is untouched.
-- Hosting/provider for production Postgres, and for RPC access (Alchemy/Infura/other).
+- Dedicated RPC provider for on-chain balance reads (viem's public default RPC is used for
+  now, which is rate-limited and not suitable at real usage volume).
 - Billing contract design, low-balance/grace-period/pause/withdrawal rules.
 - $GATE supply, allocation, vesting, liquidity, and contract address.
 - Voting snapshot mechanism and rewards funding mechanism.

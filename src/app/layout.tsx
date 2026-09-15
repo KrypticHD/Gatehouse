@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { Header } from "@/components/layout/Header";
 
+import { Providers } from "./providers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,10 +30,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-midnight text-cream">
-        <Header />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-          {children}
-        </main>
+        <Providers>
+          <Header />
+          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+            {children}
+          </main>
+        </Providers>
       </body>
     </html>
   );

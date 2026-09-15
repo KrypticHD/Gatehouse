@@ -20,3 +20,11 @@ export function normalizeAddress(value: string): string {
   }
   return value.toLowerCase();
 }
+
+/** Display-only shortened form, e.g. "0x1234…abcd". Never used for storage/comparison. */
+export function truncateAddress(value: string): string {
+  if (!isValidAddress(value)) {
+    throw new Error(`"${value}" is not a valid EVM address`);
+  }
+  return `${value.slice(0, 6)}…${value.slice(-4)}`;
+}

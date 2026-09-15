@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { GatehouseLogoMark } from "@/components/brand/GatehouseLogoMark";
-import { WalletButtonPlaceholder } from "@/components/wallet/WalletButtonPlaceholder";
+import { ConnectWalletButton } from "@/components/wallet/ConnectWalletButton";
 
 const NAV_LINKS = [
   { href: "/", label: "Explore" },
@@ -40,7 +40,7 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <WalletButtonPlaceholder className="hidden sm:inline-flex" />
+          <ConnectWalletButton className="hidden sm:inline-flex" />
           <button
             type="button"
             onClick={() => setMenuOpen((value) => !value)}
@@ -69,7 +69,7 @@ export function Header() {
               </li>
             ))}
             <li className="py-2 sm:hidden">
-              <WalletButtonPlaceholder />
+              <ConnectWalletButton />
             </li>
           </ul>
         </nav>

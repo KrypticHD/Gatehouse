@@ -7,11 +7,11 @@ enforced, and exactly which pieces exist today vs. remain for the wallet-auth ph
 
 | Principle | Status | Enforcement point |
 | --- | --- | --- |
-| Never request or store seed phrases or private keys | Holds by construction | Wallet connection will only ever use a browser wallet's `eth_requestAccounts`/signing prompts (RainbowKit/wagmi); no key material ever reaches the server |
-| Never treat a client-supplied wallet address as authenticated identity | Not yet applicable (no auth flow exists) | Future: identity is only ever established by verifying a SIWE signature server-side against a nonce issued by the server, never by trusting an address in a request body/header |
-| Cryptographically secure, one-use auth nonces | Schema ready | `AuthenticationNonce.nonce` is `@unique`; `consumedAt` is set the instant a signature is verified so the row can't be reused. The nonce value itself must be generated with `crypto.randomUUID()` or `crypto.randomBytes`, never `Math.random()`, when the issuing route is built |
-| Prevent signed-message replay | Schema ready | Verification will require: nonce exists, `consumedAt IS NULL`, `expiresAt > now()`, then set `consumedAt` in the same transaction that creates the `Session` |
-| Validate domain, URI, chain, nonce, expiry | Not yet implemented | `AuthenticationNonce.domain`/`chainId` are stored at issuance time and must be compared against the SIWE message fields (not just the signature) before accepting it |
+| Never request or store seed phrases or private keys | Holds by construction | Wallet connection only ever uses the browser wallet's own `eth_requestAccounts`/`personal_sign` prompts (wagmi's injected connector); no key material ever reaches the server |
+| Never treat a client-supplied wallet address as authenticated identity | **Enforced** | `POST /api/auth/verify` never reads an address from the request body — it recovers the address from the signature via viem's `recoverMessageAddress` and compares it to the address the nonce was issued for (`src/server/auth/verify-signature.ts`) |
+| Cryptographically secure, one-use auth nonces | **Enforced** | `src/server/auth/nonce.ts` generates with `crypto.randomBytes(16)`, never `Math.random()`; `consumedAt` is set in the same transaction that creates the `Session`, so a row can't be reused — verified with a real replay attempt (second `verify` call on a used nonce → `409 nonce_already_used`) |
+| Prevent signed-message replay | **Enforced, verified** | Same transaction as above; end-to-end tested (see docs/build-progress.md) |
+| Validate domain, URI, chain, nonce, expiry | **Partially enforced** | The signed message is always rebuilt server-side from the stored `AuthenticationNonce` row (domain/uri/chainId/nonce/expiry), so a client can never alter what it claims to have signed. `expiresAt` is checked before accepting a signature. **Not yet done:** cross-checking the request's actual `Host` header against the stored `domain` — today `domain`/`uri` come only from `NEXT_PUBLIC_APP_URL`, so a misconfigured env var wouldn't be caught automatically |
 | Keep authentication separate from community authorization | Enforced by schema shape | `Session`/`Wallet`/`User` (identity) are entirely separate models from `CommunityAdministrator` (authorization) and `CommunityAccessRule` (eligibility) — proving who you are never implies what you can access |
 | Enforce access on the server for every protected request | N/A this phase — no protected routes exist yet | When routes are added: every admin route must re-check `CommunityAdministrator` for the specific `communityId` server-side; every holder-only read must re-run `evaluateCommunityEligibility` server-side. Hiding a button is never sufficient |
 | Never rely on hidden interface elements as access control | Followed | The Explore page fixtures render the same data to every visitor; nothing today is hidden-but-fetchable. This must hold for real holder-only content too — a holders-only announcement's body must not be present in the initial HTML/JSON sent to an ineligible visitor |
@@ -26,17 +26,18 @@ enforced, and exactly which pieces exist today vs. remain for the wallet-auth ph
 ## Session model
 
 Gatehouse uses **server-side sessions referenced by an encrypted HttpOnly cookie**, not a
-bare stateless JWT:
+bare stateless JWT. **Implemented and verified end-to-end** (see docs/build-progress.md):
 
-- The cookie (via `iron-session`, once wired up) will hold only an encrypted session ID.
+- The cookie (via `iron-session`, `src/server/auth/session.ts`) holds only an encrypted
+  session ID.
 - The `Session` table is the source of truth: `expiresAt`, `revokedAt`, `userId`, `walletId`,
   and the `chainId` the SIWE message was signed for.
-- Every protected request looks up the `Session` row server-side. Revoking a session (e.g.
-  "sign out everywhere") is an immediate database update, not something that waits for a
-  token to expire.
+- Every protected request looks up the `Session` row server-side
+  (`src/server/auth/current-session.ts`). Revoking a session (`POST /api/auth/logout`) sets
+  `revokedAt` immediately — it does not wait for the cookie to expire client-side.
 
-`iron-session` and the `SESSION_SECRET` env var are already dependencies/schema entries in
-this phase; no route creates or reads a session cookie yet (see docs/build-progress.md).
+**Not yet implemented:** anything actually gating access on the session (holder-only
+content, admin routes) — today a valid session only proves identity, nothing yet checks it.
 
 ## Known accepted risk in this phase
 
