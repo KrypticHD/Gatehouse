@@ -32,15 +32,21 @@ const serverEnvSchema = z.object({
   /** Public origin used to build the SIWE message `domain`/`uri` fields. */
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
 
-  /**
-   * WalletConnect Cloud project ID. Not currently used — wallet connection uses the
-   * browser-injected connector only (see src/lib/wagmi-config.ts) — reserved for when
-   * WalletConnect's mobile QR pairing is added.
-   */
+  /** WalletConnect Cloud project ID, used by the RainbowKit wallet connectors (src/lib/wagmi-config.ts). */
   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().optional(),
 
   /** JSON-RPC URL for the default development chain (Sepolia), used for balance reads. */
   SEPOLIA_RPC_URL: optionalUrl,
+
+  /**
+   * Shared secret gating the pre-launch app (`/app` and below) behind `/preview?code=...`
+   * (src/middleware.ts). The public "coming soon" landing page at `/` needs no code.
+   * Unset means `/app` is blocked outright — fail closed, not open.
+   */
+  PREVIEW_ACCESS_CODE: z.string().min(8).optional(),
+
+  /** The Gatehouse project's X (Twitter) profile, linked from the landing page nav. Unset hides the link. */
+  NEXT_PUBLIC_GATEHOUSE_X_URL: optionalUrl,
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

@@ -42,3 +42,8 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# A separate, unrelated scaffold (its own package.json/deps/toolchain) that was dropped into
+# the repo root as source material for the landing-page design — not part of the Gatehouse
+# app. See docs/build-progress.md "Phase 3" for what was ported from it.
+/ComingSoon

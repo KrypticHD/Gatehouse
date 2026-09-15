@@ -2,11 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
-import { Header } from "@/components/layout/Header";
-
-import { Providers } from "./providers";
-import "./globals.css";
-
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -23,20 +18,17 @@ export const metadata: Metadata = {
     "One wallet. Find your community. Gatehouse discovers every crypto community your token holdings unlock.",
 };
 
+/**
+ * Deliberately minimal — this is the only place `<html>`/`<body>` can be declared, so it
+ * carries no background/text-color/app-shell assumptions of its own. The public landing
+ * page (src/app/page.tsx) and the gated app (src/app/(gated)/layout.tsx) each paint their
+ * own full-bleed background; sharing one here would leak between two visually unrelated
+ * experiences.
+ */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="flex min-h-full flex-col bg-midnight text-cream">
-        <Providers>
-          <Header />
-          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-            {children}
-          </main>
-        </Providers>
-      </body>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <body className="h-full">{children}</body>
     </html>
   );
 }

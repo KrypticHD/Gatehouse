@@ -1,24 +1,55 @@
+import { connectorsForWallets } from "@rainbow-me/rainbowkit";
+import {
+  coinbaseWallet,
+  metaMaskWallet,
+  rainbowWallet,
+  walletConnectWallet,
+} from "@rainbow-me/rainbowkit/wallets";
 import { createConfig, http } from "wagmi";
 import { mainnet, sepolia } from "wagmi/chains";
-import { injected } from "wagmi/connectors";
 
 /**
- * Wallet connection uses the browser-injected connector (MetaMask, Rabby, Coinbase Wallet
- * extension, etc.) only — no WalletConnect Cloud project ID is configured or required. This
- * covers the large majority of desktop crypto users; WalletConnect (for mobile QR pairing)
- * can be added later by setting NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID and adding its connector
- * here, without touching anything else. See docs/architecture.md.
+ * A curated wallet list rather than RainbowKit's `getDefaultConfig()` — its default list
+ * includes the newer Coinbase "Base Account" connector, which pulls in `@coinbase/cdp-sdk`
+ * and, transitively, an optional Solana/x402 payment module (`@x402/svm/exact/client`) that
+ * isn't installed and fails Next.js's static build analysis (dynamic `import()` targets must
+ * resolve at build time). None of that is relevant to Gatehouse (EVM-only, no payments in
+ * this phase), so it's simplest to just not include that connector.
  *
- * `http()` with no URL uses each chain's built-in public RPC (viem's default), so no RPC
- * provider API key is required for this phase either.
+ * This still covers a browser-extension wallet (MetaMask), WalletConnect (any mobile wallet,
+ * via QR/deep link — no extension needed), classic Coinbase Wallet, and Rainbow. The
+ * WalletConnect project ID is free (cloud.walletconnect.com) and only identifies the app to
+ * WalletConnect's relay — it carries no funds/permissions itself.
  */
+const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+
+if (!walletConnectProjectId) {
+  console.warn(
+    "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set — WalletConnect (mobile wallet) connections will not work. Get a free project ID at https://cloud.walletconnect.com.",
+  );
+}
+
+const connectors = connectorsForWallets(
+  [
+    {
+      groupName: "Popular",
+      wallets: [metaMaskWallet, walletConnectWallet, coinbaseWallet, rainbowWallet],
+    },
+  ],
+  {
+    appName: "Gatehouse",
+    projectId: walletConnectProjectId || "missing-walletconnect-project-id",
+  },
+);
+
 export const wagmiConfig = createConfig({
   chains: [sepolia, mainnet],
-  connectors: [injected()],
+  connectors,
   transports: {
     [sepolia.id]: http(),
     [mainnet.id]: http(),
   },
+  ssr: true,
 });
 
 declare module "wagmi" {

@@ -430,3 +430,19 @@ model AuditEvent {
   @@index([actorUserId, createdAt])
   @@map("audit_events")
 }
+
+// ---------------------------------------------------------------------------
+// Pre-launch marketing
+// ---------------------------------------------------------------------------
+
+/// Email capture from the public "coming soon" landing page. Deliberately not linked to
+/// `User`/`Wallet` — signing up for launch updates requires no wallet connection.
+model WaitlistSignup {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  /// Which form on the landing page was submitted ("hero" or "footer"), for basic funnel context.
+  source    String   @default("hero")
+  createdAt DateTime @default(now())
+
+  @@map("waitlist_signups")
+}

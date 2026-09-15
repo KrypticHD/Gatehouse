@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // A separate, unrelated scaffold (its own package.json/deps) that lives alongside this
+    // project — not part of the Gatehouse app, so it's not linted here.
+    "ComingSoon/**",
   ]),
 ]);
 

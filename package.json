@@ -23,6 +23,7 @@
     "@rainbow-me/rainbowkit": "^2.2.11",
     "@tanstack/react-query": "^5.102.8",
     "iron-session": "^9.0.1",
+    "lucide-react": "^1.46.0",
     "next": "16.3.5",
     "pg": "^8.23.0",
     "react": "19.2.8",

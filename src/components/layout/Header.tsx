@@ -7,9 +7,9 @@ import { GatehouseLogoMark } from "@/components/brand/GatehouseLogoMark";
 import { ConnectWalletButton } from "@/components/wallet/ConnectWalletButton";
 
 const NAV_LINKS = [
-  { href: "/", label: "Explore" },
-  { href: "/my-communities", label: "My communities" },
-  { href: "/rewards", label: "Rewards" },
+  { href: "/app", label: "Explore" },
+  { href: "/app/my-communities", label: "My communities" },
+  { href: "/app/rewards", label: "Rewards" },
 ];
 
 /**
@@ -22,7 +22,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-20 border-b border-midnight-border bg-midnight/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-        <Link href="/" className="flex items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-electric-blue">
+        <Link href="/app" className="flex items-center gap-2 rounded-md focus-visible:outline-2 focus-visible:outline-electric-blue">
           <GatehouseLogoMark size={36} priority />
           <span className="text-lg font-semibold tracking-tight text-cream">Gatehouse</span>
         </Link>

@@ -9,7 +9,7 @@
 | Styling | Tailwind CSS v4 | Design tokens as CSS variables in `src/app/globals.css`, exposed via `@theme inline` |
 | Database | PostgreSQL | No local disk state; managed Postgres in every environment |
 | ORM | Prisma 7 | Uses the new `prisma-client` generator + explicit driver adapter (see below) |
-| Wallet connection | wagmi 2.x + viem, browser-injected connector | RainbowKit is installed (pinned to wagmi v2, see below) but not yet mounted — the current UI uses wagmi's `injected()` connector directly so no WalletConnect project ID is required; see docs/build-progress.md |
+| Wallet connection | wagmi 2.x + viem + RainbowKit | Curated wallet list (MetaMask, WalletConnect, Coinbase Wallet, Rainbow) via `connectorsForWallets` rather than `getDefaultConfig()` — see "Why RainbowKit uses a curated wallet list" below |
 | Auth | Sign-In with Ethereum (EIP-4361) | Implemented — `src/lib/siwe.ts` + `src/server/auth/*`, verified end-to-end; see docs/build-progress.md |
 | Sessions | iron-session (encrypted HttpOnly cookie) + a `Session` DB row | Cookie holds a pointer, not the source of truth — see docs/security.md |
 | Validation | Zod | `src/lib/validation/*`, `src/server/env.ts` |
@@ -27,6 +27,19 @@ declares a `^2.9.0` peer dependency on wagmi and has not published a wagmi-v3-co
 version. Installing wagmi v3 alongside RainbowKit produces an unresolved peer dependency and
 an untested combination. `package.json` pins `wagmi@2.19.5`; revisit this pin once
 RainbowKit ships wagmi v3 support.
+
+## Why RainbowKit uses a curated wallet list
+
+`src/lib/wagmi-config.ts` builds its connector list with `connectorsForWallets([...])`
+rather than RainbowKit's `getDefaultConfig()`. `getDefaultConfig()`'s default wallet set
+includes Coinbase's newer "Base Account" connector, which pulls in `@coinbase/cdp-sdk` and,
+transitively, optional Solana/x402-payment sub-packages that aren't installed. Next's
+bundler tries to statically resolve those dynamic `import()`s and fails the build — even
+though Gatehouse never uses that connector. Rather than installing unused packages just to
+satisfy the resolver, `next.config.ts` also marks `@coinbase/cdp-sdk`/`@base-org/account` as
+`serverExternalPackages` (so Node resolves them at runtime instead of bundling them), and the
+wallet list itself sticks to MetaMask, WalletConnect, Coinbase Wallet (the classic connector)
+and Rainbow — deliberately not the newest "Base Account" wallet.
 
 ## Why Prisma uses a driver adapter instead of a schema `url`
 
