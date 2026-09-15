@@ -5,6 +5,8 @@ message, and automatically discover every community your token holdings unlock.
 
 > **Your token. Your people.** One wallet. Find your community.
 
+**Live:** https://gatehouse-ten.vercel.app
+
 This is a mobile-first website (not a native app, not a Discord product). See
 [`docs/product.md`](docs/product.md) for the full product vision,
 [`docs/architecture.md`](docs/architecture.md) for the technical design, and
